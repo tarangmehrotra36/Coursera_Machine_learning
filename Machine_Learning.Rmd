@@ -1,0 +1,152 @@
+---
+title: "Machine_Learning"
+author: "Tarang Mehrotra"
+date: "September 30, 2018"
+output: html_document
+---
+
+**Background**
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+
+**Model built**
+
+The expacted outcome variable is classe, a 5 level of factor variable. In this dataset, participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in 5 different fashion: Class A - excatly according to the specification, Class B - throwing the elbows to the front, Class c- lifting the dumbbell only halfway, Class D - lowering the dumbbell only halfway, Class E - throwing the hips to the front.
+
+Class A correspons to the specified execution of the exercise, while the other 4 classes correpond to common mistakes. Decision tree will be used to create the model. After the model have been developed. Cross-validation will be performed. Two set of data will be created, original training data set (70%) and subtesting data set (30%).
+
+
+
+## Data
+
+
+The training data for this project are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+The test data are available here:
+  https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r }
+
+training <- read.csv("./pml-training.csv", header = T, sep = ',', stringsAsFactors = FALSE)
+testing <- read.csv("./pml-testing.csv", header = T, sep = ',', stringsAsFactors = FALSE)
+levels(as.factor(training$classe))
+```
+
+Selecting only those features which have proper variations and more than 90% data is not missing.
+
+```{r }
+training_final<-data.frame(training$num_window,training$roll_belt,training$pitch_belt,training$yaw_belt,
+                           training$total_accel_belt,training$gyros_belt_x,training$gyros_belt_y,
+                           training$gyros_belt_z,training$accel_belt_x,training$accel_belt_y,
+                           training$accel_belt_z,training$magnet_belt_x,training$magnet_belt_y,
+                           training$magnet_belt_z,training$roll_arm,training$pitch_arm,training$yaw_arm,
+                           training$total_accel_arm,training$gyros_arm_x,training$gyros_arm_y,
+                           training$gyros_arm_z,training$accel_arm_x,training$accel_arm_y,
+                           training$accel_arm_z,training$magnet_arm_x,training$magnet_arm_y,
+                           training$magnet_arm_z,training$roll_dumbbell,training$pitch_dumbbell,
+                           training$yaw_dumbbell,training$total_accel_dumbbell,training$gyros_dumbbell_x,
+                           training$gyros_dumbbell_y,training$gyros_dumbbell_z,training$accel_dumbbell_x,
+                           training$accel_dumbbell_y,training$accel_dumbbell_z,training$magnet_dumbbell_x,
+                           training$magnet_dumbbell_y,training$magnet_dumbbell_z,training$roll_forearm,
+                           training$pitch_forearm,training$yaw_forearm,training$total_accel_forearm,
+                           training$gyros_forearm_x,training$gyros_forearm_y,training$gyros_forearm_z,
+                           training$accel_forearm_x,training$accel_forearm_y,training$accel_forearm_z,
+                           training$magnet_forearm_x,training$magnet_forearm_y,training$magnet_forearm_z,
+                           classe=training$classe)
+names(training_final)<-gsub("training.","",names(training_final))
+
+testing_final<-data.frame(testing$num_window,testing$roll_belt,testing$pitch_belt,testing$yaw_belt,
+                           testing$total_accel_belt,testing$gyros_belt_x,testing$gyros_belt_y,
+                           testing$gyros_belt_z,testing$accel_belt_x,testing$accel_belt_y,
+                           testing$accel_belt_z,testing$magnet_belt_x,testing$magnet_belt_y,
+                           testing$magnet_belt_z,testing$roll_arm,testing$pitch_arm,testing$yaw_arm,
+                           testing$total_accel_arm,testing$gyros_arm_x,testing$gyros_arm_y,
+                           testing$gyros_arm_z,testing$accel_arm_x,testing$accel_arm_y,
+                           testing$accel_arm_z,testing$magnet_arm_x,testing$magnet_arm_y,
+                           testing$magnet_arm_z,testing$roll_dumbbell,testing$pitch_dumbbell,
+                           testing$yaw_dumbbell,testing$total_accel_dumbbell,testing$gyros_dumbbell_x,
+                           testing$gyros_dumbbell_y,testing$gyros_dumbbell_z,testing$accel_dumbbell_x,
+                           testing$accel_dumbbell_y,testing$accel_dumbbell_z,testing$magnet_dumbbell_x,
+                           testing$magnet_dumbbell_y,testing$magnet_dumbbell_z,testing$roll_forearm,
+                           testing$pitch_forearm,testing$yaw_forearm,testing$total_accel_forearm,
+                           testing$gyros_forearm_x,testing$gyros_forearm_y,testing$gyros_forearm_z,
+                           testing$accel_forearm_x,testing$accel_forearm_y,testing$accel_forearm_z,
+                           testing$magnet_forearm_x,testing$magnet_forearm_y,testing$magnet_forearm_z)
+
+names(testing_final)<-gsub("testing.","",names(testing_final))
+
+```
+
+## Creating data partition
+
+We divide the training data into TrainSet and TestSet in the ratio 7:3 .The model will be trained using the Trainset and it's accuracy will be determined on TestSet, based on which we will select the final model.   
+
+```{r }
+library(caret)
+inTrain  <- createDataPartition(training_final$classe, p=0.7, list=FALSE)
+TrainSet <- training_final[inTrain, ]
+TestSet  <- training_final[-inTrain, ]
+
+```
+
+**1. Random Forest **
+
+Here we create our first model using the mighty random forest algorithm. 
+
+```{r }
+
+set.seed(322)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modFitRandForest <- train(classe ~ ., data=TrainSet, method="rf",
+                          trControl=controlRF)
+modFitRandForest$finalModel
+
+
+predictRandForest <- predict(modFitRandForest, newdata=TestSet)
+confMatRandForest <- confusionMatrix(predictRandForest, TestSet$classe)
+confMatRandForest
+```
+
+Random Forest has an accuracy of (99.5+)%
+
+**2. Decision Tree **
+
+Here we create our second model using the Rpart Decision tree algorithm. 
+
+```{r }
+
+set.seed(124)
+modFitRpart<-train(classe ~ ., data=TrainSet, method="rpart",
+                   trControl=controlRF)
+modFitRpart$finalModel
+library(rattle)
+fancyRpartPlot(modFitRpart$finalModel)
+
+predictRpart <- predict(modFitRpart, newdata=TestSet)
+
+confusionMatrix(predictRpart, TestSet$classe)
+
+```
+Clearly Decision tree has a very low accuracy in predicting the Class.
+
+##Conclusion
+
+We select Random Forest over decision tree for obvious reasons(better accuracy).
+
+```{r }
+
+predictTEST <- predict(modFitRandForest, newdata=testing_final)
+predictTEST
+
+```
+
+In this study, the characteristics of predictors for both traning and testing datasets (train and test) are reduced. These characteristics are the percentage of NAs values, low variance, correlation and skewness. Therefore, the variables of the data sets are scaled. The training dataset is splitted into subtraining and validation parts to construct a predictive model and evaluate its accuracy. Decision Tree and Random Forest are applied.The Random Forest is a much better predictive model than the Decision Tree, which has a larger accuracy (>99.5%).
+
+This project is reproducible and was done with the following environment:
+
+```{r }
+
+sessionInfo()
+```
+
